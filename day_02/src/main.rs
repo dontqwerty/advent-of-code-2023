@@ -95,6 +95,31 @@ impl GameCubes {
 
         true
     }
+
+    fn max_cubes(&self) -> u32 {
+        let mut max_red_cubes = 0;
+        let mut max_green_cubes = 0;
+        let mut max_blue_cubes = 0;
+        for set in &self.sets {
+            let red_cubes = set.amount("red");
+            let green_cubes = set.amount("green");
+            let blue_cubes = set.amount("blue");
+
+            if red_cubes > max_red_cubes {
+                max_red_cubes = red_cubes;
+            }
+
+            if green_cubes > max_green_cubes {
+                max_green_cubes = green_cubes;
+            }
+
+            if blue_cubes > max_blue_cubes {
+                max_blue_cubes = blue_cubes;
+            }
+        }
+
+        max_red_cubes * max_green_cubes * max_blue_cubes
+    }
 }
 
 fn main() -> Result<(), Error> {
@@ -107,6 +132,7 @@ fn main() -> Result<(), Error> {
         HashMap::from([("red", 12), ("green", 13), ("blue", 14)]);
 
     let mut possible_games_id_sum = 0;
+    let mut minimum_games_cubes = 0;
     for line in input_file_buf
         .lines()
         .map(|line| line.expect("Expecting a line here"))
@@ -115,9 +141,11 @@ fn main() -> Result<(), Error> {
         if game_cube.possible(&available_cubes) {
             possible_games_id_sum += game_cube.id;
         }
+        minimum_games_cubes += game_cube.max_cubes();
     }
 
     println!("{}", possible_games_id_sum);
+    println!("{}", minimum_games_cubes);
 
     Ok(())
 }
