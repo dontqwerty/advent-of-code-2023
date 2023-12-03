@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     env,
     fs::File,
     io::{BufRead, BufReader, Error},
@@ -11,29 +12,54 @@ enum DigitPosition {
     StartEnd,
 }
 
+impl DigitPosition {
+    fn new(index: usize, number_len: usize) -> Self {
+        if number_len == 1 {
+            DigitPosition::StartEnd
+        } else if index == 0 {
+            DigitPosition::Start
+        } else if index == number_len - 1 {
+            DigitPosition::End
+        } else {
+            DigitPosition::Middle
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
-struct LiteralDigit {
-    digit: u32,
+struct Digit {
+    value: u32,
     row_ix: usize,
     col_ix: usize,
 }
 
-impl LiteralDigit {
-    fn is_digit_of_part_number(&self, pos: DigitPosition, lines: &[Vec<char>]) -> bool {
+impl Digit {
+    const INDEX_SHIFTS_FOR_START: &[(i32, i32)] = &[(-1, -1), (-1, 0), (0, -1), (1, -1), (1, 0)];
+    const INDEX_SHIFT_FOR_MIDDLE: &[(i32, i32)] = &[(-1, 0), (1, 0)];
+    const INDEX_SHIFT_FOR_END: &[(i32, i32)] = &[(-1, 0), (-1, 1), (0, 1), (1, 0), (1, 1)];
+    const INDEX_SHIFT_FOR_START_END: &[(i32, i32)] = &[
+        (-1, -1),
+        (-1, 0),
+        (-1, 1),
+        (0, -1),
+        (0, 1),
+        (1, -1),
+        (1, 0),
+        (1, 1),
+    ];
+
+    fn get_adjacent_gears(
+        &self,
+        pos: DigitPosition,
+        lines: &[Vec<char>],
+    ) -> Option<Vec<(usize, usize)>> {
+        let mut ret = None;
+
         let index_shifts = match pos {
-            DigitPosition::Start => vec![(-1, -1), (-1, 0), (0, -1), (1, -1), (1, 0)],
-            DigitPosition::Middle => vec![(-1, 0), (1, 0)],
-            DigitPosition::End => vec![(-1, 0), (-1, 1), (0, 1), (1, 0), (1, 1)],
-            DigitPosition::StartEnd => vec![
-                (-1, -1),
-                (-1, 0),
-                (-1, 1),
-                (0, -1),
-                (0, 1),
-                (1, -1),
-                (1, 0),
-                (1, 1),
-            ],
+            DigitPosition::Start => Self::INDEX_SHIFTS_FOR_START,
+            DigitPosition::Middle => Self::INDEX_SHIFT_FOR_MIDDLE,
+            DigitPosition::End => Self::INDEX_SHIFT_FOR_END,
+            DigitPosition::StartEnd => Self::INDEX_SHIFT_FOR_START_END,
         };
 
         for (row_shift, col_shift) in index_shifts {
@@ -53,64 +79,70 @@ impl LiteralDigit {
                 continue;
             }
 
-            if let Some(Some(adjacent)) = lines
-                .get(adjacent_row_ix)
-                .map(|row| row.get(adjacent_col_ix))
-            {
-                if adjacent != &'.' && adjacent.is_ascii_punctuation() {
-                    return true;
-                }
+            let adjacent = &lines[adjacent_row_ix][adjacent_col_ix];
+
+            if !(adjacent != &'.' && adjacent.is_ascii_punctuation()) {
+                continue;
+            }
+
+            if ret.is_none() {
+                ret = Some(vec![])
+            }
+
+            if adjacent == &'*' {
+                let mut ret_value = ret.expect("Return value should be some by now");
+                ret_value.push((adjacent_row_ix, adjacent_col_ix));
+                ret = Some(ret_value);
             }
         }
 
-        false
+        ret
     }
 }
 
 #[derive(Clone, Debug)]
-struct LiteralNumber {
-    digits: Vec<LiteralDigit>,
+struct Number {
+    digits: Vec<Digit>,
 }
 
-impl LiteralNumber {
-    fn push_digit(&mut self, digit: LiteralDigit) {
-        self.digits.push(digit)
-    }
-
-    fn is_empty(&self) -> bool {
-        self.digits.is_empty()
-    }
-
-    fn empty(&mut self) {
-        self.digits.truncate(0)
-    }
-
+impl Number {
     fn as_number(&self) -> u32 {
         let mut number = 0;
-        for (ix, literal_digit) in self.digits.iter().rev().enumerate() {
-            number += literal_digit.digit * (10_u32).pow(ix as u32);
+        for (ix, digit) in self.digits.iter().rev().enumerate() {
+            number += digit.value * (10_u32).pow(ix as u32);
         }
         number
     }
 
-    fn as_part_number(&self, lines: &[Vec<char>]) -> Option<u32> {
-        for (literal_digit_ix, literal_digit) in self.digits.iter().enumerate() {
-            let literal_digit_pos = if self.digits.len() == 1 {
-                DigitPosition::StartEnd
-            } else if literal_digit_ix == 0 {
-                DigitPosition::Start
-            } else if literal_digit_ix == self.digits.len() - 1 {
-                DigitPosition::End
-            } else {
-                DigitPosition::Middle
-            };
+    fn as_part_number(
+        &self,
+        lines: &[Vec<char>],
+        possible_gears: &mut HashMap<(usize, usize), Vec<u32>>,
+    ) -> Option<u32> {
+        let mut ret = None;
+        for (digit_ix, digit) in self.digits.iter().enumerate() {
+            let literal_digit_pos = DigitPosition::new(digit_ix, self.digits.len());
 
-            if literal_digit.is_digit_of_part_number(literal_digit_pos, lines) {
-                return Some(self.as_number());
+            if let Some(gears) = digit.get_adjacent_gears(literal_digit_pos, lines) {
+                let part_number = self.as_number();
+                if ret.is_none() {
+                    ret = Some(part_number);
+                }
+
+                for gear in gears {
+                    if let Some(prev_gear_part_numbers) =
+                        possible_gears.insert(gear, vec![part_number])
+                    {
+                        let gear_part_numbers = possible_gears
+                            .get_mut(&gear)
+                            .expect("This entry should exist");
+                        gear_part_numbers.extend(prev_gear_part_numbers);
+                    }
+                }
             }
         }
 
-        None
+        ret
     }
 }
 
@@ -131,27 +163,38 @@ fn main() -> Result<(), Error> {
         lines.push(line);
     }
 
-    let mut part_number_total = 0;
+    let mut missing_part_number = 0;
+    let mut possible_gears = HashMap::new();
     for (row_ix, line) in lines.iter().enumerate() {
-        let mut literal_number = LiteralNumber { digits: vec![] };
+        let mut number = Number { digits: vec![] };
         for (col_ix, char) in line.iter().enumerate() {
             if char.is_numeric() {
-                let digit = char.to_digit(10).unwrap();
-                literal_number.push_digit(LiteralDigit {
-                    digit,
+                let digit = Digit {
+                    value: char.to_digit(10).expect("This char should be a digit"),
                     row_ix,
                     col_ix,
-                });
-            } else if !literal_number.is_empty() {
-                if let Some(part_number) = literal_number.as_part_number(lines.as_slice()) {
-                    part_number_total += part_number;
+                };
+                number.digits.push(digit);
+            } else if !number.digits.is_empty() {
+                if let Some(part_number) =
+                    number.as_part_number(lines.as_slice(), &mut possible_gears)
+                {
+                    missing_part_number += part_number;
                 }
-                literal_number.empty();
+                number.digits.truncate(0);
             }
         }
     }
 
-    println!("{}", part_number_total);
+    println!("{}", missing_part_number);
+
+    let gear_ratio: u32 = possible_gears
+        .iter()
+        .filter(|(_, v)| v.len() == 2)
+        .map(|(_, v)| v[0] * v[1])
+        .sum();
+
+    println!("{}", gear_ratio);
 
     Ok(())
 }
