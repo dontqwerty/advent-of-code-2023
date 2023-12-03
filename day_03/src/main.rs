@@ -35,9 +35,9 @@ struct Digit {
 
 impl Digit {
     const INDEX_SHIFTS_FOR_START: &[(i32, i32)] = &[(-1, -1), (-1, 0), (0, -1), (1, -1), (1, 0)];
-    const INDEX_SHIFT_FOR_MIDDLE: &[(i32, i32)] = &[(-1, 0), (1, 0)];
-    const INDEX_SHIFT_FOR_END: &[(i32, i32)] = &[(-1, 0), (-1, 1), (0, 1), (1, 0), (1, 1)];
-    const INDEX_SHIFT_FOR_START_END: &[(i32, i32)] = &[
+    const INDEX_SHIFTS_FOR_MIDDLE: &[(i32, i32)] = &[(-1, 0), (1, 0)];
+    const INDEX_SHIFTS_FOR_END: &[(i32, i32)] = &[(-1, 0), (-1, 1), (0, 1), (1, 0), (1, 1)];
+    const INDEX_SHIFTS_FOR_START_END: &[(i32, i32)] = &[
         (-1, -1),
         (-1, 0),
         (-1, 1),
@@ -57,9 +57,9 @@ impl Digit {
 
         let index_shifts = match pos {
             DigitPosition::Start => Self::INDEX_SHIFTS_FOR_START,
-            DigitPosition::Middle => Self::INDEX_SHIFT_FOR_MIDDLE,
-            DigitPosition::End => Self::INDEX_SHIFT_FOR_END,
-            DigitPosition::StartEnd => Self::INDEX_SHIFT_FOR_START_END,
+            DigitPosition::Middle => Self::INDEX_SHIFTS_FOR_MIDDLE,
+            DigitPosition::End => Self::INDEX_SHIFTS_FOR_END,
+            DigitPosition::StartEnd => Self::INDEX_SHIFTS_FOR_START_END,
         };
 
         for (row_shift, col_shift) in index_shifts {
