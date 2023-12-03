@@ -1,8 +1,15 @@
 use std::{
-    cmp, env,
+    env,
     fs::File,
     io::{BufRead, BufReader, Error},
 };
+
+enum DigitPosition {
+    Start,
+    Middle,
+    End,
+    StartEnd,
+}
 
 #[derive(Clone, Debug)]
 struct LiteralDigit {
@@ -12,35 +19,46 @@ struct LiteralDigit {
 }
 
 impl LiteralDigit {
-    fn possible(&self, lines: &[Vec<char>]) -> bool {
-        println!("{:?}", self);
-        for row_ix_shift in -1..2 as i32 {
-            for col_ix_shift in -1..2 as i32 {
-                // println!("shifts: {}, {}", row_ix_shift, col_ix_shift);
+    fn is_digit_of_part_number(&self, pos: DigitPosition, lines: &[Vec<char>]) -> bool {
+        let index_shifts = match pos {
+            DigitPosition::Start => vec![(-1, -1), (-1, 0), (0, -1), (1, -1), (1, 0)],
+            DigitPosition::Middle => vec![(-1, 0), (1, 0)],
+            DigitPosition::End => vec![(-1, 0), (-1, 1), (0, 1), (1, 0), (1, 1)],
+            DigitPosition::StartEnd => vec![
+                (-1, -1),
+                (-1, 0),
+                (-1, 1),
+                (0, -1),
+                (0, 1),
+                (1, -1),
+                (1, 0),
+                (1, 1),
+            ],
+        };
 
-                if row_ix_shift == 0 && col_ix_shift == 0 {
-                    // println!("Zero shift skip");
-                    continue;
-                }
+        for (row_shift, col_shift) in index_shifts {
+            let adjacent_row_ix = self.row_ix as i32 + row_shift;
+            if adjacent_row_ix < 0 || adjacent_row_ix > (lines.len() as i32 - 1) {
+                continue;
+            }
+            let adjacent_row_ix = adjacent_row_ix as usize;
 
-                let adjacent_row_ix = cmp::max(0, self.row_ix as i32 + row_ix_shift) as usize;
-                let adjacent_col_ix = cmp::max(0, self.col_ix as i32 + col_ix_shift) as usize;
+            let adjacent_col_ix = self.col_ix as i32 + col_shift;
+            if adjacent_col_ix < 0 || adjacent_col_ix > (lines[adjacent_row_ix].len() as i32 - 1) {
+                continue;
+            }
+            let adjacent_col_ix = adjacent_col_ix as usize;
 
-                if adjacent_row_ix == self.row_ix && adjacent_col_ix == self.col_ix {
-                    // println!("Self skip");
-                    continue;
-                }
-                // println!("adjacent: {}, {}", adjacent_row_ix, adjacent_col_ix);
+            if adjacent_row_ix == self.row_ix && adjacent_col_ix == self.col_ix {
+                continue;
+            }
 
-                if let Some(Some(adjacent)) = lines
-                    .get(adjacent_row_ix)
-                    .map(|row| row.get(adjacent_col_ix))
-                {
-                    println!("adjacent value: {}", adjacent);
-                    if adjacent != &'.' && adjacent.is_ascii_punctuation() {
-                        println!("-------------------------> true");
-                        return true;
-                    }
+            if let Some(Some(adjacent)) = lines
+                .get(adjacent_row_ix)
+                .map(|row| row.get(adjacent_col_ix))
+            {
+                if adjacent != &'.' && adjacent.is_ascii_punctuation() {
+                    return true;
                 }
             }
         }
@@ -70,9 +88,29 @@ impl LiteralNumber {
     fn as_number(&self) -> u32 {
         let mut number = 0;
         for (ix, literal_digit) in self.digits.iter().rev().enumerate() {
-            number += literal_digit.digit * (10 as u32).pow(ix as u32);
+            number += literal_digit.digit * (10_u32).pow(ix as u32);
         }
         number
+    }
+
+    fn as_part_number(&self, lines: &[Vec<char>]) -> Option<u32> {
+        for (literal_digit_ix, literal_digit) in self.digits.iter().enumerate() {
+            let literal_digit_pos = if self.digits.len() == 1 {
+                DigitPosition::StartEnd
+            } else if literal_digit_ix == 0 {
+                DigitPosition::Start
+            } else if literal_digit_ix == self.digits.len() - 1 {
+                DigitPosition::End
+            } else {
+                DigitPosition::Middle
+            };
+
+            if literal_digit.is_digit_of_part_number(literal_digit_pos, lines) {
+                return Some(self.as_number());
+            }
+        }
+
+        None
     }
 }
 
@@ -93,7 +131,7 @@ fn main() -> Result<(), Error> {
         lines.push(line);
     }
 
-    let mut part_number = 0;
+    let mut part_number_total = 0;
     for (row_ix, line) in lines.iter().enumerate() {
         let mut literal_number = LiteralNumber { digits: vec![] };
         for (col_ix, char) in line.iter().enumerate() {
@@ -105,20 +143,15 @@ fn main() -> Result<(), Error> {
                     col_ix,
                 });
             } else if !literal_number.is_empty() {
-                println!("####################################################");
-                println!("{:?}", literal_number.as_number());
-                for literal_digit in &literal_number.digits {
-                    if literal_digit.possible(lines.as_slice()) {
-                        part_number += literal_number.as_number();
-                        break;
-                    }
+                if let Some(part_number) = literal_number.as_part_number(lines.as_slice()) {
+                    part_number_total += part_number;
                 }
                 literal_number.empty();
             }
         }
     }
 
-    println!("{}", part_number);
+    println!("{}", part_number_total);
 
     Ok(())
 }
