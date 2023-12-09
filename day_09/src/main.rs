@@ -11,6 +11,7 @@ fn main() -> Result<(), Error> {
     let input_file_buf = BufReader::new(input_file);
 
     let mut total = 0;
+    let mut total_1 = 0;
 
     for line in input_file_buf
         .lines()
@@ -32,18 +33,23 @@ fn main() -> Result<(), Error> {
         }
 
         let mut foo = vec![];
+        let mut foo_1 = vec![];
         for (i, r) in results.iter().enumerate().rev() {
             if i == results.len() - 1 {
                 foo.push(0);
+                foo_1.push(0);
                 continue;
             }
-            foo.push(r.last().unwrap() + foo.last().unwrap())
+            foo.push(r.last().unwrap() + foo.last().unwrap());
+            foo_1.push(r.first().unwrap() - foo_1.last().unwrap());
         }
 
         total += foo.last().unwrap();
+        total_1 += foo_1.last().unwrap();
     }
 
     println!("{}", total);
+    println!("{}", total_1);
 
     Ok(())
 }
